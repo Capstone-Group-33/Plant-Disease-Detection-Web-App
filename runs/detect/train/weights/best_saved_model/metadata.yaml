@@ -1,0 +1,40 @@
+description: Ultralytics YOLO11n model trained on /content/Plant-Disease-Detection-1/data.yaml
+author: Ultralytics
+date: '2025-10-12T05:59:31.921807'
+version: 8.3.211
+license: AGPL-3.0 License (https://ultralytics.com/license)
+docs: https://docs.ultralytics.com
+stride: 32
+task: detect
+batch: 1
+imgsz:
+- 640
+- 640
+names:
+  0: Bacterial Leaf Blight rice
+  1: Blight Corn
+  2: Brown Spot Rice
+  3: Common Rust Corn
+  4: Gray Leaf Corn
+  5: Healthy Corn
+  6: Healthy Potato
+  7: Leaf Smut Rice
+  8: Potato Early BLight
+  9: Potato Late Blight
+  10: Tomato Bacterial Sport
+  11: Tomato Early Blight
+  12: Tomato Healthy
+  13: Tomato Late Blight
+  14: Tomato Leaf Mold
+  15: Tomato Mosaic Virus
+  16: Tomato Septoria Leaf Spot
+  17: Tomato Spider Mites
+  18: Tomato Target Spot
+  19: Tomato Yellow Leaf Curl Disease
+args:
+  batch: 1
+  fraction: 1.0
+  half: false
+  int8: false
+  nms: false
+channels: 3

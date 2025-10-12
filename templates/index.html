@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Leaf Senese App</title>
+</head>
+<body>
+  <h1>Flask App (Proto Type)</h1>
+
+  <h2>Live Camera</h2>
+  <button onclick="fetch('/start_camera')">Start Camera</button>
+  <button onclick="fetch('/stop_camera')">Stop Camera</button>
+  <br><br>
+  <img id="video" src="/video_feed" width="640" height="480">
+
+  <h3>Detections (updates every second)</h3>
+  <pre id="detections"></pre>
+
+  <h2>Upload Image</h2>
+  <form id="uploadForm" enctype="multipart/form-data">
+    <input type="file" name="file" accept="image/*">
+    <button type="submit">Upload & Detect</button>
+  </form>
+  <div id="uploadResult"></div>
+
+  <script>
+    async function pollDetections() {
+      while(true){
+        let res = await fetch('/detections');
+        let data = await res.json();
+        document.getElementById("detections").innerText = JSON.stringify(data,null,2);
+        await new Promise(r=>setTimeout(r,1000));
+      }
+    }
+    pollDetections();
+
+    document.getElementById("uploadForm").onsubmit = async (e) => {
+      e.preventDefault();
+      let formData = new FormData(e.target);
+      let res = await fetch("/upload",{method:"POST",body:formData});
+      let data = await res.json();
+      if(data.success){
+        document.getElementById("uploadResult").innerHTML = `
+          <p>Detections: ${JSON.stringify(data.detections,null,2)}</p>
+          <p>Original:</p><img src="${data.input_image}" width="320">
+          <p>Annotated:</p><img src="${data.output_image}" width="320">
+        `;
+      }else{
+        document.getElementById("uploadResult").innerText = data.message;
+      }
+    };
+  </script>
+</body>
+</html>
