@@ -784,9 +784,14 @@ def uploaded_file(filename):
     return app.send_static_file(f'../uploads/{filename}')
 
 if __name__ == "__main__":
+    import os
+
     print("=" * 50)
     print("YOLO Flask App Starting...")
-    print("URL: http://127.0.0.1:5000")
+    port = int(os.environ.get("PORT", 5000))  # ✅ use Render’s assigned port
+    print(f"URL: http://0.0.0.0:{port}")
     print("Make sure 'best.pt' is in the same directory!")
     print("=" * 50)
-    app.run(debug=True, host='127.0.0.1', port=5000)
+
+    # ✅ Must bind to 0.0.0.0 for Render
+    app.run(debug=False, host="0.0.0.0", port=port)
