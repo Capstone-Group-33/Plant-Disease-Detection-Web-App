@@ -1,4 +1,4 @@
-from flask import Flask, render_template_string, Response, jsonify, request, redirect, url_for
+from flask import Flask, render_template_string, Response, jsonify, request
 import cv2
 import threading
 import time
@@ -6,13 +6,13 @@ from datetime import datetime
 from ultralytics import YOLO
 import numpy as np
 import queue
-import os, json
+import os
 from werkzeug.utils import secure_filename
 
-# Create app with default settings
+# Create app
 app = Flask(__name__)
 
-# Create uploads directory
+# Uploads folder
 UPLOAD_FOLDER = 'uploads'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
@@ -25,9 +25,92 @@ stop_event = threading.Event()
 camera_thread = None
 camera_lock = threading.Lock()
 
-# HTML template as string (no separate file needed)
-HTML_TEMPLATE = '''
-<!DOCTYPE html>
+# Disease diagnosis and remedy dictionary
+disease_info = {
+    "Tomato_Yellow_Leaf_Curl_Virus": {
+        "diagnosis": "A viral disease spread by whiteflies, causing curling and yellowing of leaves with stunted growth.",
+        "remedy": "Remove infected plants, control whiteflies using sticky traps or neem oil, and plant resistant varieties."
+    },
+    "Tomato_Mosaic_Virus": {
+        "diagnosis": "Viral infection leading to mottled, discolored leaves and reduced fruit quality.",
+        "remedy": "Remove infected plants, disinfect tools, and wash hands before handling plants (avoid tobacco exposure)."
+    },
+    "Tomato_Target_Spot": {
+        "diagnosis": "Fungal disease causing brown concentric spots on leaves and fruit.",
+        "remedy": "Prune lower leaves, improve air circulation, and apply copper-based fungicide."
+    },
+    "Tomato_Spider_Mites": {
+        "diagnosis": "Tiny mites that cause yellow stippling and webbing on leaves.",
+        "remedy": "Spray leaves with water, neem oil, or insecticidal soap. Encourage natural predators like ladybugs."
+    },
+    "Tomato_Septoria_Leaf_Spot": {
+        "diagnosis": "Fungal infection causing small circular spots with dark borders on lower leaves.",
+        "remedy": "Remove infected leaves, avoid wetting foliage, and apply fungicide like mancozeb or chlorothalonil."
+    },
+    "Tomato_Leaf_Mold": {
+        "diagnosis": "High humidity fungal disease causing yellow spots and mold growth on leaves' underside.",
+        "remedy": "Increase ventilation, reduce humidity, and treat with sulfur or copper fungicides."
+    },
+    "Tomato_Late_Blight": {
+        "diagnosis": "Serious fungal disease causing dark, water-soaked lesions on leaves and fruit.",
+        "remedy": "Destroy infected plants, avoid overhead watering, and apply fungicides containing chlorothalonil."
+    },
+    "Tomato_Healthy": {
+        "diagnosis": "No signs of disease. Plant appears healthy and vigorous.",
+        "remedy": "Continue regular care—ensure balanced nutrients and pest monitoring."
+    },
+    "Tomato_Early_Blight": {
+        "diagnosis": "Fungal disease causing dark, concentric leaf spots that start on lower leaves.",
+        "remedy": "Remove affected leaves, rotate crops, and spray with fungicides like mancozeb."
+    },
+    "Tomato_Bacterial_Spot": {
+        "diagnosis": "Bacterial infection causing water-soaked lesions on leaves and fruits.",
+        "remedy": "Avoid overhead watering, use copper-based bactericides, and destroy infected debris."
+    },
+    "Potato_Healthy": {
+        "diagnosis": "No visible infection detected. Plant is healthy.",
+        "remedy": "Maintain good soil health, avoid overwatering, and monitor for pests."
+    },
+    "Potato_Late_Blight": {
+        "diagnosis": "Serious fungal disease leading to dark lesions and tuber rot.",
+        "remedy": "Remove infected plants, avoid wet foliage, and use preventive fungicides regularly."
+    },
+    "Potato_Early_Blight": {
+        "diagnosis": "Dark spots with concentric rings that lead to leaf drop.",
+        "remedy": "Remove infected leaves, apply fungicide, and ensure crop rotation."
+    },
+    "Corn_Healthy": {
+        "diagnosis": "No disease detected.",
+        "remedy": "Maintain field hygiene, balanced nutrition, and adequate spacing."
+    },
+    "Corn_Gray_Leaf_Spot": {
+        "diagnosis": "Gray or tan rectangular lesions caused by Cercospora fungus.",
+        "remedy": "Use resistant hybrids, rotate crops, and apply fungicides at early tasseling."
+    },
+    "Corn_Common_Rust": {
+        "diagnosis": "Small reddish-brown pustules on both sides of leaves.",
+        "remedy": "Use rust-resistant hybrids and apply fungicides when infection is severe."
+    },
+    "Corn_Blight": {
+        "diagnosis": "Fungal leaf disease causing elongated gray or tan lesions that reduce yield.",
+        "remedy": "Use resistant varieties, rotate crops, and remove infected residues."
+    },
+    "Rice_Brown_Spot": {
+        "diagnosis": "Fungal disease causing small brown spots on leaves and grains.",
+        "remedy": "Apply balanced fertilizers, improve drainage, and spray fungicide if needed."
+    },
+    "Rice_Leaf_Smut": {
+        "diagnosis": "Fungal infection forming black, dusty smut balls on leaves.",
+        "remedy": "Use disease-free seeds, avoid excessive nitrogen fertilizer, and treat with carbendazim."
+    },
+    "Rice_Bacterial_Leaf_Blight": {
+        "diagnosis": "Bacterial disease causing yellowing and wilting of leaves from tip downward.",
+        "remedy": "Use resistant varieties, avoid mechanical injury, and apply copper-based bactericide."
+    },
+}
+
+# HTML template with updated sections
+HTML_TEMPLATE = '''<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -314,17 +397,70 @@ HTML_TEMPLATE = '''
             margin-bottom: 5px;
         }
         
-        .detection-details {
-            background: #2d3748;
-            color: #e2e8f0;
-            padding: 20px;
+        .diagnosis-remedy-container {
+            background: white;
             border-radius: 12px;
+            padding: 25px;
             margin: 20px 0;
-            font-family: 'Courier New', monospace;
-            font-size: 0.9rem;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        
+        .diagnosis-section, .remedy-section {
+            margin-bottom: 20px;
+        }
+        
+        .diagnosis-section:last-child, .remedy-section:last-child {
+            margin-bottom: 0;
+        }
+        
+        .section-title {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: #2d3748;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .section-content {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
             line-height: 1.6;
-            max-height: 300px;
-            overflow-y: auto;
+            color: #4a5568;
+            border-left: 4px solid #667eea;
+        }
+        
+        .disease-item {
+            margin-bottom: 25px;
+            padding-bottom: 25px;
+            border-bottom: 2px solid #e2e8f0;
+        }
+        
+        .disease-item:last-child {
+            margin-bottom: 0;
+            padding-bottom: 0;
+            border-bottom: none;
+        }
+        
+        .disease-name {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #667eea;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .confidence-badge {
+            background: linear-gradient(135deg, #51cf66 0%, #40c057 100%);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
         }
         
         .loading {
@@ -353,7 +489,7 @@ HTML_TEMPLATE = '''
     <div class="container">
         <div class="header">
             <h1>🎯 Leaf Sense App</h1>
-            <p>Advanced Object Detection with Real-time Analysis</p>
+            <p>Advanced Plant Disease Detection with Real-time Analysis</p>
         </div>
         
         <div class="grid">
@@ -454,12 +590,12 @@ HTML_TEMPLATE = '''
                     formattedText += `⏰ Last Update: ${new Date(data.timestamp).toLocaleTimeString()}\\n\\n`;
                     
                     if (data.detections && data.detections.length > 0) {
-                        formattedText += '📋 Detected Objects:\\n';
+                        formattedText += '📋 Detected Diseases:\\n';
                         data.detections.forEach((det, index) => {
                             formattedText += `  ${index + 1}. ${det.class} (${(det.confidence * 100).toFixed(1)}%)\\n`;
                         });
                     } else {
-                        formattedText += '👀 No objects detected';
+                        formattedText += '👀 No diseases detected';
                     }
                     
                     document.getElementById("detections").innerText = formattedText;
@@ -496,26 +632,47 @@ HTML_TEMPLATE = '''
                 const data = await response.json();
                 
                 if (data.success) {
-                    let detectionsList = '';
+                    let diagnosisHTML = '';
+                    
                     if (data.detections && data.detections.length > 0) {
-                        detectionsList = data.detections.map((det, index) => 
-                            `${index + 1}. <strong>${det.class}</strong> - ${(det.confidence * 100).toFixed(1)}% confidence`
-                        ).join('<br>');
+                        diagnosisHTML = data.detections.map((det, index) => `
+                            <div class="disease-item">
+                                <div class="disease-name">
+                                    🦠 ${det.class}
+                                    <span class="confidence-badge">${(det.confidence * 100).toFixed(1)}% confidence</span>
+                                </div>
+                                <div class="diagnosis-section">
+                                    <div class="section-title">
+                                        🔬 Diagnosis
+                                    </div>
+                                    <div class="section-content">
+                                        ${det.Diagnosis || 'Information not available'}
+                                    </div>
+                                </div>
+                                <div class="remedy-section">
+                                    <div class="section-title">
+                                        💊 Recommended Treatment
+                                    </div>
+                                    <div class="section-content">
+                                        ${det.Remedy || 'Information not available'}
+                                    </div>
+                                </div>
+                            </div>
+                        `).join('');
                     }
                     
                     uploadResult.innerHTML = `
                         <div class="results">
                             <div class="detection-summary">
                                 <div class="detection-count">${data.detections.length}</div>
-                                <div>Objects Detected</div>
+                                <div>${data.detections.length === 1 ? 'Disease' : 'Diseases'} Detected</div>
                             </div>
                             
                             ${data.detections.length > 0 ? `
-                                <div style="background: white; padding: 20px; border-radius: 12px; margin: 20px 0;">
-                                    <h4 style="margin-bottom: 15px; color: #2d3748;">🎯 Detection Results:</h4>
-                                    <div style="line-height: 1.8;">${detectionsList}</div>
+                                <div class="diagnosis-remedy-container">
+                                    ${diagnosisHTML}
                                 </div>
-                            ` : '<p style="text-align: center; color: #667eea; font-size: 1.1rem;">No objects detected in this image</p>'}
+                            ` : '<p style="text-align: center; color: #667eea; font-size: 1.1rem; margin: 20px 0;">No diseases detected - Plant appears healthy! 🌱</p>'}
                             
                             <div class="results-grid">
                                 <div class="result-item">
@@ -526,11 +683,6 @@ HTML_TEMPLATE = '''
                                     <div class="result-label">🎯 Detection Results</div>
                                     <img src="${data.output_image}" class="result-image" alt="Image with detections">
                                 </div>
-                            </div>
-                            
-                            <div class="detection-details">
-                                <strong>📊 Technical Details:</strong><br><br>
-                                ${JSON.stringify(data.detections, null, 2)}
                             </div>
                         </div>
                     `;
@@ -564,13 +716,12 @@ HTML_TEMPLATE = '''
             }
         });
 
-        console.log("🎯 YOLO Detection Studio loaded successfully!");
+        console.log("🎯 Plant Disease Detection App loaded successfully!");
     </script>
 </body>
-</html>
-'''
+</html>''' 
 
-# Model loading function
+# Model loading
 def load_model_async(model_path='best.pt'):
     if model_obj['loaded'] or model_obj['loading']:
         return
@@ -588,7 +739,7 @@ def load_model_async(model_path='best.pt'):
             model_obj['loading'] = False
     threading.Thread(target=_loader, daemon=True).start()
 
-# Camera thread class
+# Camera thread
 class CameraThread(threading.Thread):
     def __init__(self, camera_id=0, conf=0.5):
         super().__init__(daemon=True)
@@ -620,8 +771,7 @@ class CameraThread(threading.Thread):
                 annotated = frame.copy()
                 local_detections = []
 
-                # Run detection if model is loaded
-                if model_obj['loaded'] and model_obj['model'] is not None:
+                if model_obj['loaded'] and model_obj['model']:
                     try:
                         results = model_obj['model'](frame, conf=self.conf, verbose=False)
                         for res in results:
@@ -633,13 +783,20 @@ class CameraThread(threading.Thread):
                                     cls = int(box.cls[0])
                                     name = model_obj['model'].names.get(cls, str(cls))
                                     
+                                    # Include diagnosis & remedy
+                                    info = disease_info.get(name.replace(" ", "_"), {
+                                        'diagnosis': 'Info not available',
+                                        'remedy': 'Info not available'
+                                    })
+                                    
                                     local_detections.append({
                                         'class': name,
                                         'confidence': conf_val,
-                                        'bbox': [int(x1), int(y1), int(x2), int(y2)]
+                                        'bbox': [int(x1), int(y1), int(x2), int(y2)],
+                                        'diagnosis': info['diagnosis'],
+                                        'remedy': info['remedy']
                                     })
                                     
-                                    # Draw bounding box
                                     color = tuple(int(x) for x in np.random.RandomState(cls).randint(0, 255, 3))
                                     cv2.rectangle(annotated, (x1, y1), (x2, y2), color, 2)
                                     cv2.putText(annotated, f"{name}: {conf_val:.2f}", 
@@ -647,24 +804,19 @@ class CameraThread(threading.Thread):
                     except Exception as e:
                         print(f"Detection error: {e}")
 
-                # Update global detections
                 global detections
                 detections = local_detections
 
-                # Encode frame for streaming
                 ret2, buf = cv2.imencode('.jpg', annotated)
                 if ret2:
                     if frame_queue.full():
-                        try: 
-                            frame_queue.get_nowait()
-                        except queue.Empty: 
-                            pass
+                        try: frame_queue.get_nowait()
+                        except queue.Empty: pass
                     frame_queue.put(buf.tobytes())
                 
                 time.sleep(0.03)
         finally:
-            if self.cap:
-                self.cap.release()
+            if self.cap: self.cap.release()
             self.running = False
             print("Camera thread stopped")
 
@@ -697,12 +849,9 @@ def stop_camera():
             camera_thread.stop()
             stop_event.set()
             camera_thread = None
-        # Clear frame queue
         while not frame_queue.empty():
-            try: 
-                frame_queue.get_nowait()
-            except queue.Empty: 
-                pass
+            try: frame_queue.get_nowait()
+            except queue.Empty: pass
         return jsonify({'success': True, 'message': 'Camera stopped'})
 
 def generate_mjpeg():
@@ -721,8 +870,8 @@ def video_feed():
 @app.route('/detections')
 def get_detections():
     return jsonify({
-        'detections': detections, 
-        'count': len(detections), 
+        'detections': detections,
+        'count': len(detections),
         'timestamp': datetime.now().isoformat()
     })
 
@@ -730,31 +879,24 @@ def get_detections():
 def upload_image():
     if 'file' not in request.files:
         return jsonify({'success': False, 'message': 'No file uploaded'})
-    
     file = request.files['file']
     if file.filename == '':
         return jsonify({'success': False, 'message': 'No file selected'})
-
-    # Save uploaded file
+    
     filename = secure_filename(file.filename)
     filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
     file.save(filepath)
 
-    # Check if model is loaded
-    if not model_obj['loaded'] or model_obj['model'] is None:
+    if not model_obj['loaded'] or not model_obj['model']:
         return jsonify({'success': False, 'message': 'YOLO model not loaded yet. Please wait.'})
 
     try:
-        # Run detection
         results = model_obj['model'](filepath, conf=0.5, verbose=False)
-        
-        # Create annotated image
         annotated = results[0].plot()
         output_filename = f"annotated_{filename}"
         output_path = os.path.join(app.config['UPLOAD_FOLDER'], output_filename)
         cv2.imwrite(output_path, annotated)
 
-        # Extract detection data
         local_detections = []
         boxes = results[0].boxes
         if boxes is not None:
@@ -763,10 +905,17 @@ def upload_image():
                 conf_val = float(box.conf[0])
                 cls = int(box.cls[0])
                 name = model_obj['model'].names.get(cls, str(cls))
+                
+                info = disease_info.get(name.replace(" ", "_"), {
+                    'diagnosis': 'Info not available',
+                    'remedy': 'Info not available'
+                })
+                
                 local_detections.append({
                     'class': name,
                     'confidence': conf_val,
-                    'bbox': [int(x1), int(y1), int(x2), int(y2)]
+                    'Diagnosis': info['diagnosis'],
+                    'Remedy': info['remedy']
                 })
 
         return jsonify({
@@ -778,20 +927,15 @@ def upload_image():
     except Exception as e:
         return jsonify({'success': False, 'message': f'Detection failed: {str(e)}'})
 
-# Serve uploaded files
 @app.route('/uploads/<filename>')
 def uploaded_file(filename):
-    return app.send_static_file(f'../uploads/{filename}')
+    from flask import send_from_directory
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
 if __name__ == "__main__":
-    import os
-
-    print("=" * 50)
-    print("YOLO Flask App Starting...")
-    port = int(os.environ.get("PORT", 5000))  # ✅ use Render’s assigned port
-    print(f"URL: http://0.0.0.0:{port}")
+    print("="*50)
+    print("Plant Disease Detection App Starting...")
+    print("URL: http://127.0.0.1:8000")
     print("Make sure 'best.pt' is in the same directory!")
-    print("=" * 50)
-
-    # ✅ Must bind to 0.0.0.0 for Render
-    app.run(debug=False, host="0.0.0.0", port=port)
+    print("="*50)
+    app.run(host="0.0.0.0", port=8000, debug=True)
