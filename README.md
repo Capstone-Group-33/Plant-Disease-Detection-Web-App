@@ -30,5 +30,5 @@ It is deployed in https://plant-disease-detection-web-app.onrender.com/ as well 
 ## 📦 Requirements
 
 - Python 3.10+  
-- pip packages:
+- pip packages: ultralytics, flask, open-cv
 
