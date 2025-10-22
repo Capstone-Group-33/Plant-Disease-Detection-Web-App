@@ -2,6 +2,9 @@
 
 A real-time web application built with **Flask** and **YOLOv8** for detecting diseases in plant leaves. Users can analyze live camera feeds or upload images for instant detection and diagnosis.
 
+It is deployed in https://plant-disease-detection-web-app.onrender.com/ as well but the functionality is not working yet. :(
+
+**If you would like to try running it, please download the whole repository and run app.py**
 ---
 
 ## 🌿 Features
