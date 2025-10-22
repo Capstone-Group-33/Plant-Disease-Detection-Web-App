@@ -109,7 +109,7 @@ disease_info = {
     },
 }
 
-# HTML template with updated sections
+# HTML template with updated live detection display
 HTML_TEMPLATE = '''<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -283,6 +283,8 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
             padding: 20px;
             margin: 20px 0;
             border-left: 4px solid #667eea;
+            max-height: 500px;
+            overflow-y: auto;
         }
         
         .detections-header {
@@ -292,16 +294,63 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
             color: #2d3748;
         }
         
-        #detections {
-            background: #2d3748;
-            color: #e2e8f0;
-            padding: 15px;
+        .live-disease-item {
+            background: white;
             border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+        
+        .live-disease-item:last-child {
+            margin-bottom: 0;
+        }
+        
+        .live-disease-name {
+            font-size: 1rem;
+            font-weight: 700;
+            color: #667eea;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .live-confidence-badge {
+            background: linear-gradient(135deg, #51cf66 0%, #40c057 100%);
+            color: white;
+            padding: 3px 10px;
+            border-radius: 15px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        
+        .live-section {
+            margin-bottom: 10px;
+        }
+        
+        .live-section:last-child {
+            margin-bottom: 0;
+        }
+        
+        .live-section-title {
             font-size: 0.85rem;
-            max-height: 250px;
-            overflow-y: auto;
-            line-height: 1.4;
-            font-family: 'Courier New', monospace;
+            font-weight: 600;
+            color: #4a5568;
+            margin-bottom: 5px;
+        }
+        
+        .live-section-content {
+            font-size: 0.85rem;
+            line-height: 1.5;
+            color: #718096;
+        }
+        
+        .no-detection-message {
+            text-align: center;
+            padding: 30px;
+            color: #667eea;
+            font-weight: 500;
         }
         
         .upload-area {
@@ -517,7 +566,9 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
                 
                 <div class="detections-container">
                     <div class="detections-header">🔍 Live Detection Results</div>
-                    <pre id="detections">Waiting for detections...</pre>
+                    <div id="detections">
+                        <div class="no-detection-message">Waiting for detections...</div>
+                    </div>
                 </div>
             </div>
             
@@ -579,28 +630,41 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
             }
         }
 
-        // Poll detections with better formatting
+        // Poll detections with diagnosis and remedy display
         async function pollDetections() {
             while(true) {
                 try {
                     const response = await fetch('/detections');
                     const data = await response.json();
                     
-                    let formattedText = `🔍 Detection Status: ${data.count} objects found\\n`;
-                    formattedText += `⏰ Last Update: ${new Date(data.timestamp).toLocaleTimeString()}\\n\\n`;
+                    const detectionsDiv = document.getElementById("detections");
                     
                     if (data.detections && data.detections.length > 0) {
-                        formattedText += '📋 Detected Diseases:\\n';
+                        let html = '';
                         data.detections.forEach((det, index) => {
-                            formattedText += `  ${index + 1}. ${det.class} (${(det.confidence * 100).toFixed(1)}%)\\n`;
+                            html += `
+                                <div class="live-disease-item">
+                                    <div class="live-disease-name">
+                                        🦠 ${det.class}
+                                        <span class="live-confidence-badge">${(det.confidence * 100).toFixed(1)}%</span>
+                                    </div>
+                                    <div class="live-section">
+                                        <div class="live-section-title">🔬 Diagnosis:</div>
+                                        <div class="live-section-content">${det.diagnosis || 'Information not available'}</div>
+                                    </div>
+                                    <div class="live-section">
+                                        <div class="live-section-title">💊 Remedy:</div>
+                                        <div class="live-section-content">${det.remedy || 'Information not available'}</div>
+                                    </div>
+                                </div>
+                            `;
                         });
+                        detectionsDiv.innerHTML = html;
                     } else {
-                        formattedText += '👀 No diseases detected';
+                        detectionsDiv.innerHTML = '<div class="no-detection-message">👀 No diseases detected</div>';
                     }
-                    
-                    document.getElementById("detections").innerText = formattedText;
                 } catch (error) {
-                    document.getElementById("detections").innerText = "❌ Connection error: " + error.message;
+                    document.getElementById("detections").innerHTML = `<div class="no-detection-message" style="color: #ff6b6b;">❌ Connection error: ${error.message}</div>`;
                 }
                 await new Promise(resolve => setTimeout(resolve, 1000));
             }
